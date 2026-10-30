@@ -1,0 +1,14 @@
+<!-- Paste into a Squarespace Code Block. -->
+<style>
+  /* Let the block grow and shrink with the dashboard instead of the Fluid Engine grid. */
+  .fluid-engine:has(#work-search-case-study) { display: block !important; height: auto !important; }
+  .fluid-engine:has(#work-search-case-study) > .fe-block { grid-area: auto !important; height: auto !important; }
+</style>
+<iframe id="work-search-case-study" src="https://acorvin.github.io/work-search-case-study/" title="Work Search: a private tool for finding data work" loading="lazy" style="width:100%;height:800px;border:0;display:block"></iframe>
+<script>
+window.addEventListener('message', function (e) {
+  if (e.data && e.data.type === 'work-search-height') {
+    document.getElementById('work-search-case-study').style.height = e.data.height + 'px';
+  }
+});
+</script>

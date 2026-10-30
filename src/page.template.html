@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Work Search: a private tool that finds data work in public hiring feeds, ranks it by rules I can read, and runs a daily outreach routine. A case study by Alex Corvin.">
+<style>:root{color-scheme:light} body{margin:0} [hidden]{display:none!important}</style>
+<title>Work Search</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@300..500&display=swap">
+<style>
+/* Same shell as the other case studies: Geist type, #121212 ink, white ground, square edges. */
+:root{
+  --bg:#ffffff; --panel:#ffffff; --ink:#121212; --ink-2:#6b6b6b; --ink-3:#999999; --rule:#e3e3e3; --grid:#eeeeee; --code:#f6f6f6;
+  --keep:#5acaaf; --cut:#d9d9d9; --low:#5acaaf; --some:#eba051; --high:#e0675a; --hi:#121212;
+  --f-body:"Geist",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-data:"Geist Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#121212; --panel:#171717; --ink:#ffffff; --ink-2:#aaaaaa; --ink-3:#808080; --rule:#2a2a2a; --grid:#222222; --code:#1d1d1d;
+  --keep:#3da989; --cut:#3a3a3a; --low:#3da989; --some:#cb8230; --high:#c9574b; --hi:#ffffff; color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#121212; --panel:#171717; --ink:#ffffff; --ink-2:#aaaaaa; --ink-3:#808080; --rule:#2a2a2a; --grid:#222222; --code:#1d1d1d;
+  --keep:#3da989; --cut:#3a3a3a; --low:#3da989; --some:#cb8230; --high:#c9574b; --hi:#ffffff; color-scheme:dark; }
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1040px;margin:0 auto;padding-inline:20px;padding-block:40px 64px}
+.eyebrow{font-family:var(--f-data);font-weight:300;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+h1{font-weight:700;letter-spacing:-.035em;font-size:clamp(40px,7vw,76px);line-height:.98;margin:10px 0 10px;text-wrap:balance}
+.subtitle{font-weight:400;letter-spacing:-.01em;font-size:clamp(20px,2.8vw,30px);line-height:1.2;color:var(--ink-2);margin:0 0 22px;max-width:42ch;text-wrap:balance}
+h2{font-weight:600;letter-spacing:-.02em;font-size:clamp(22px,3vw,28px);line-height:1.15;margin:0 0 6px;text-wrap:balance}
+h3{font-size:17px;margin:0 0 4px;font-weight:600}
+p{margin:0 0 12px;max-width:66ch}
+.lede{font-size:clamp(18px,2.2vw,21px);color:var(--ink-2);max-width:60ch}
+.lede strong{color:var(--ink);font-weight:600}
+.num{font-family:var(--f-data);font-variant-numeric:tabular-nums;font-size:.92em}
+.sw{display:inline-block;width:10px;height:10px;margin-right:6px;transform:translateY(-1px)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:14px;color:var(--ink-2)}
+section.fig,section.prose{margin-top:56px;display:grid;gap:10px;min-width:0}
+.fig .claim,.prose p{color:var(--ink-2);font-size:16px}
+.prose p strong{color:var(--ink)}
+.chart{position:relative;background:var(--panel);border:1px solid var(--rule);padding:14px;min-width:0}
+.src{font-size:13px;color:var(--ink-3)}
+
+/* Funnel */
+.funnel{display:grid;gap:8px}
+.frow{display:grid;grid-template-columns:minmax(120px,210px) 1fr;gap:12px;align-items:center}
+.frow .lab{font-size:14px;color:var(--ink)}
+.frow .lab small{display:block;font-size:12px;color:var(--ink-3)}
+.track{position:relative;height:26px;background:var(--grid)}
+.track i{position:absolute;inset:0 auto 0 0;background:var(--keep);min-width:2px}
+.track b{position:absolute;left:8px;top:50%;transform:translateY(-50%);font:500 12.5px var(--f-data);color:var(--ink)}
+
+/* Week */
+.week{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:8px;align-items:end;height:200px;padding-top:18px}
+.day{display:flex;flex-direction:column;justify-content:flex-end;height:100%;position:relative}
+.day .bar{background:var(--cut);position:relative}
+.day .bar .rev{position:absolute;left:0;right:0;bottom:0;background:var(--keep)}
+.day .v{font:500 11.5px var(--f-data);color:var(--ink-2);text-align:center;margin-bottom:4px}
+.days{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:8px;margin-top:6px}
+.days span{font:400 11px var(--f-data);color:var(--ink-3);text-align:center}
+.days em{display:block;font-style:normal;color:var(--keep);font-weight:500;margin-top:2px}
+
+/* Flow diagram */
+.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:10px;counter-reset:f}
+.node{border:1px solid var(--rule);padding:12px;background:var(--panel);display:grid;gap:4px;align-content:start;position:relative}
+.node .k{font-family:var(--f-data);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.node b{font-weight:600;font-size:15px}
+.node p{font-size:13.5px;color:var(--ink-2);margin:0}
+.node.person{border-color:var(--ink)}
+
+/* Score examples */
+.examples{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:12px}
+.ex{border:1px solid var(--rule);padding:14px;background:var(--panel);min-width:0}
+.ex h3{margin-bottom:2px}
+.ex .meta{font-size:13px;color:var(--ink-3);margin-bottom:10px}
+.ex table{width:100%;border-collapse:collapse;font-size:13.5px}
+.ex td{padding:5px 0;border-bottom:1px solid var(--grid);vertical-align:top}
+.ex td:last-child{text-align:right;font-family:var(--f-data);white-space:nowrap;padding-left:10px}
+.ex td small{display:block;color:var(--ink-3);font-size:12px}
+.ex tr.total td{border-bottom:0;border-top:2px solid var(--ink);font-weight:600}
+.band{display:inline-block;font:500 11px var(--f-data);letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border:1px solid var(--ink)}
+
+/* Source bars */
+table.src-table{width:100%;border-collapse:collapse;font-size:14px}
+.src-table th{font-family:var(--f-data);font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);font-weight:500;text-align:left;padding:4px 8px 8px 0}
+.src-table td{padding:6px 8px 6px 0;border-top:1px solid var(--grid);vertical-align:middle}
+.src-table td.n{font-family:var(--f-data);text-align:right;width:56px;color:var(--ink-2)}
+.minibar{height:10px;background:var(--cut);position:relative;min-width:2px}
+.minibar.k{background:var(--keep)}
+
+/* Ghost */
+.stack{display:flex;height:34px}
+.stack i{display:flex;align-items:center;justify-content:center;font:500 12px var(--f-data);color:#121212;min-width:0;overflow:hidden;white-space:nowrap}
+
+figure.shot{margin:8px 0 0;display:grid;gap:8px}
+figure.shot img{display:block;width:100%;height:auto;border:1px solid var(--rule)}
+figure.shot figcaption{font-size:13px;color:var(--ink-3)}
+.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px}
+.checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px}
+.checks div{border-left:3px solid var(--keep);padding:2px 0 2px 12px}
+.checks div.not{border-left-color:var(--some)}
+.checks p{font-size:15px;margin:2px 0 0}
+
+.notes{margin-top:64px;padding-top:24px;border-top:2px solid var(--ink);display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:24px 40px}
+.notes p,.notes li{font-size:15px;color:var(--ink-2)}
+.notes ul{padding-left:18px;margin:0}
+.notes li{margin-bottom:8px}
+@media (max-width:560px){ body{font-size:16px} .wrap{padding-inline:16px;padding-block:28px 48px} .frow{grid-template-columns:1fr;gap:4px} .week{height:160px} }
+.is-embedded .wrap{padding-block:8px 16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="eyebrow">Agentic automation · Case study</div>
+  <h1>Work Search</h1>
+  <p class="subtitle">A private tool that finds data work, ranks it by rules I can read, and runs my day from one screen</p>
+  <p class="lede">I wanted to find out whether a small tool of my own could replace hours of searching job boards each day, which bury new postings and miss roles that combine several skills, and whether it could also keep me writing to the people who hire for those roles, since an application with no person behind it is easy to ignore.</p>
+  <p class="lede" id="lede2"></p>
+</header>
+
+<section class="fig" id="fig-funnel">
+  <div class="eyebrow">Figure 1 · From feeds to a short list</div>
+  <h2 id="f1title"></h2>
+  <p class="claim" id="f1claim"></p>
+  <div class="chart"><div class="funnel" id="funnel"></div></div>
+  <p class="src" id="f1src"></p>
+</section>
+
+<section class="fig" id="fig-week">
+  <div class="eyebrow">Figure 2 · A week of postings</div>
+  <h2 id="f2title"></h2>
+  <p class="claim" id="f2claim"></p>
+  <div class="legend">
+    <span><i class="sw" style="background:var(--cut)"></i>New postings</span>
+    <span><i class="sw" style="background:var(--keep)"></i>Worth reviewing (score 50 or more)</span>
+  </div>
+  <div class="chart"><div class="week" id="week"></div><div class="days" id="days"></div></div>
+  <p class="src" id="f2src"></p>
+</section>
+
+<section class="prose">
+  <div class="eyebrow">How it works</div>
+  <h2>How it works</h2>
+  <p>Most organizations publish their open roles through a hiring platform that offers a public feed. Work Search reads those feeds directly every morning, so it sees a posting within a day of it going up, notices when one is taken down, and does not depend on how a job board ranks its listings. If one feed fails, the others still run.</p>
+  <div class="flow" aria-label="How a posting moves through the tool">
+    <div class="node"><span class="k">1 · Collect</span><b>Hiring feeds</b><p id="nodeFeeds"></p></div>
+    <div class="node"><span class="k">2 · Gate</span><b>Location</b><p>Remote in the US, the EU or worldwide, or anywhere in Spain. Any other posting is dropped here.</p></div>
+    <div class="node"><span class="k">3 · Score</span><b>Plain rules</b><p>Points for title, skills, organization and contract work, each with a written reason.</p></div>
+    <div class="node"><span class="k">4 · Label</span><b>Ghost risk</b><p>Old, reposted or vague postings are labeled, and none are hidden.</p></div>
+    <div class="node person"><span class="k">5 · Decide</span><b>I read and act</b><p>The tool can prepare a resume or a note, which I edit and send myself.</p></div>
+  </div>
+</section>
+
+<section class="prose">
+  <h2>How a posting is scored</h2>
+  <p>Each score is a sum of points, and every point comes with a written reason. No language model is involved, so the same posting always receives the same score, and when I disagree with a score I change a line in a settings file. The two postings below are invented, and they are scored with the real rules.</p>
+  <div class="examples">
+    <div class="ex">
+      <h3>Data Scientist</h3>
+      <div class="meta">Research nonprofit · Remote, worldwide</div>
+      <table>
+        <tr><td>Strong title match<small>data scientist</small></td><td>+40</td></tr>
+        <tr><td>Skills in the description<small>Python, SQL, D3, data visualization, open data</small></td><td>+32</td></tr>
+        <tr><td>Mission-driven organization<small>research</small></td><td>+8</td></tr>
+        <tr><td>Open to anywhere</td><td>+5</td></tr>
+        <tr class="total"><td>Score <span class="band">Apply now</span></td><td>85</td></tr>
+      </table>
+    </div>
+    <div class="ex">
+      <h3>Research Associate</h3>
+      <div class="meta">Policy institute · Remote, US only</div>
+      <table>
+        <tr><td>Medium title match<small>research associate</small></td><td>+25</td></tr>
+        <tr><td>Skills in the description<small>Python, SQL, survey, evaluation</small></td><td>+17</td></tr>
+        <tr><td>Mission-driven organization<small>research</small></td><td>+8</td></tr>
+        <tr><td>US-only remote<small>usually means living in the US</small></td><td>−5</td></tr>
+        <tr class="total"><td>Score <span class="band" style="border-color:var(--ink-3);color:var(--ink-2)">Low</span></td><td>45</td></tr>
+      </table>
+    </div>
+  </div>
+  <figure class="shot">
+    <img src="img/matches.jpg" width="2560" height="1640" loading="lazy" alt="The Matches screen. A posting scored 98 and marked Apply now, with its reasons listed: title plus 40, keywords plus 40, organization plus 8. Buttons to save it to the board, dismiss it, open it or prepare to apply.">
+    <figcaption>The Matches screen, where each score lists its reasons and each posting carries a ghost label. The screenshots use demo data, and every organization, posting and person in them is invented.</figcaption>
+  </figure>
+  <p class="src">Each skill adds its weight once, up to 40 points in total. Words about seniority add nothing. Phrases such as "security clearance" or "must reside in the United States" each take 10 points off. A score of 70 or more means apply now, and a score of 50 or more means the posting is worth reviewing.</p>
+</section>
+
+<section class="fig" id="fig-source">
+  <div class="eyebrow">Figure 3 · Where the matches come from</div>
+  <h2 id="f3title"></h2>
+  <p class="claim" id="f3claim"></p>
+  <div class="chart"><table class="src-table" id="sources"></table></div>
+  <p class="src" id="f3src"></p>
+</section>
+
+<section class="fig" id="fig-ghost">
+  <div class="eyebrow">Figure 4 · Ghost-job labels</div>
+  <h2 id="f4title"></h2>
+  <p class="claim">A posting that has been up for months, has been reposted, leaves out its pay when the same organization's other roles include it, or says almost nothing specific is more likely to be stale. The tool adds up those signals and labels the posting. It does not hide any posting, because a label can be wrong and I would rather check it myself.</p>
+  <div class="chart"><div class="stack" id="ghost" role="img"></div></div>
+  <div class="legend">
+    <span><i class="sw" style="background:var(--low)"></i>Low risk</span>
+    <span><i class="sw" style="background:var(--some)"></i>Some risk</span>
+    <span><i class="sw" style="background:var(--high)"></i>High risk</span>
+  </div>
+  <p class="src" id="f4src"></p>
+</section>
+
+<section class="prose">
+    <h2>The daily routine</h2>
+  <p>The daily checklist asks for five messages, three of them to people I have not spoken to before, along with three applications and two proposals. A board tracks every lead from first contact to interview and shows who is due a follow-up that day. A draft screen writes a short note to a named person about a named role, at a length that suits LinkedIn or email.</p>
+  <div class="shots">
+    <figure class="shot">
+      <img src="img/today.jpg" width="2560" height="1640" loading="lazy" alt="The Today screen: two of eight checklist tasks done, with counters for messages and applications, and a Due now panel with one follow-up due today.">
+      <figcaption>The Today screen, with the checklist on the left and the people due a follow-up on the right.</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="img/board.jpg" width="3680" height="1640" loading="lazy" alt="The Board screen with six columns, from lead to closed, each card showing a person, their role, the next step, the kind of lead and its date.">
+      <figcaption>The Board screen, where moving a card to a new stage sets its next follow-up date.</figcaption>
+    </figure>
+  </div>
+  <p>After a draft comes back, plain code checks it for stock phrases, exclamation marks, sentence fragments, stiff wording, length, and any number that does not appear in my resume. The check only flags problems and does not rewrite anything, so the final text is always mine.</p>
+</section>
+
+<section class="prose">
+  <h2>The weekly review</h2>
+  <p>On Fridays the checklist asks for a 30-minute review. The Week screen shows each day's messages, applications and proposals against their daily targets, which makes a slow week easy to see. Every screen has a light and a dark theme.</p>
+  <div class="shots">
+    <figure class="shot">
+      <img src="img/week.jpg" width="2560" height="1640" loading="lazy" alt="The Week screen: bars for messages, applications and proposals on each day, filling up to the daily target, with weekly totals of 21, 10 and 5.">
+      <figcaption>The Week screen, where each bar fills up to that day's target.</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="img/matches-dark.jpg" width="2560" height="1640" loading="lazy" alt="The Matches screen in the dark theme.">
+      <figcaption>The Matches screen in the dark theme.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="prose">
+  <h2>What a language model sees</h2>
+  <p>Before anything is sent to a language model, my name, email, phone number and links are replaced with placeholders, and ordinary code puts them back afterward. If any personal detail is still present after the replacement, the prompt is not built at all, and a test checks this against a fictional resume. Posting text and my own notes are marked as data, and the instructions tell the model to ignore any commands they contain. The tool also works without an API key, because it can build the prompt for me to paste into a chat myself.</p>
+</section>
+
+<section class="prose">
+  <h2>How it runs each day</h2>
+  <p>A scheduled macOS job runs the refresh at 7:00 each morning, and if the laptop was asleep, the app runs it when I next open it. A lock file stops two refreshes from running at the same time, and the status line shows when the last run failed or when none has finished in a day. <span id="runningNote"></span></p>
+</section>
+
+<section class="prose">
+  <h2>What was tested</h2>
+  <div class="checks">
+    <div><h3 id="testsTitle">178 automated tests</h3><p>They run in about two seconds without a network connection, and they cover location parsing, scoring, every feed parser against saved real responses, the board's date rules, the privacy checks and the email matching.</p></div>
+    <div><h3>Checked by hand</h3><p>I ran the real feeds and the morning job, and I checked every screen in a browser at desktop and phone widths in both themes.</p></div>
+    <div class="not"><h3>Only tested with stand-ins</h3><p>The model API call, the optional read-only Gmail sync that suggests moving a card when someone replies, and one hiring platform whose server blocked my requests.</p></div>
+    <div class="not"><h3>Not measured yet</h3><p>I do not yet know whether the tool changes how many replies I receive, because that needs several more weeks of use.</p></div>
+  </div>
+</section>
+
+<section class="notes">
+  <div>
+    <h3>About the numbers</h3>
+    <ul>
+      <li id="noteAsOf"></li>
+      <li id="noteSteady"></li>
+      <li>Counts come from the app's own database, read-only. No real posting titles, organizations, contacts or messages appear on this page.</li>
+      <li>The screenshots show the app running against a separate demo database. Every organization, posting and person in them is made up, but the scores and ghost labels come from the app's real rules.</li>
+    </ul>
+  </div>
+  <div>
+    <h3>What to keep in mind</h3>
+    <ul>
+      <li>Organizations like the ones I follow hire rarely, and some publish no feed the tool can read.</li>
+      <li>The rules reflect my own skills and where I can work, so they would need rewriting for anyone else.</li>
+      <li>One week of postings shows how many arrive, but it is too short to show a longer pattern.</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Built with</h3>
+    <ul>
+      <li>Python, FastAPI and SQLite for collection, scoring and the API.</li>
+      <li>Vue and TypeScript for the screens.</li>
+      <li>A macOS launchd job for the daily run.</li>
+      <li>Design and engineering: Alex Corvin.</li>
+    </ul>
+  </div>
+</section>
+</div>
+
+<script>
+const S = __DATA__;
+const $ = id => document.getElementById(id);
+const fmt = n => n.toLocaleString('en-US');
+const pct = (a, b) => Math.round(100 * a / b) + '%';
+const longDate = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'});
+const shortDate = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-US', {weekday: 'short', day: 'numeric'});
+const F = S.funnel, W = S.week;
+
+$('lede2').innerHTML = `Every morning it reads the public hiring feeds that <span class="num">${S.organizations}</span> organizations publish through <span class="num">${S.platforms}</span> hiring platforms, along with <span class="num">${S.boards}</span> remote job boards. In its first full week, <span class="num">${W.new}</span> new postings came in, <span class="num">${W.review}</span> of them were worth reviewing, and <span class="num">${W.apply_now}</span> scored high enough to apply right away.`;
+$('nodeFeeds').textContent = `${S.organizations} organizations on ${S.platforms} hiring platforms, and ${S.boards} job boards, read every morning.`;
+
+/* Figure 1 */
+$('f1title').textContent = `${fmt(F.open)} open postings narrow to ${F.review} worth reading`;
+$('f1claim').textContent = `The location gate removes the most: ${fmt(S.gate_location)} postings, or ${pct(S.gate_location, F.open)} of those open, are roles I cannot do from Spain. The score then narrows the rest to a list short enough to read in a few minutes.`;
+const steps = [
+  ['Open postings', 'in every feed', F.open],
+  ['Past the location gate', 'remote in the US, EU or worldwide, or in Spain', F.past_gate],
+  ['Some fit', 'score 30 or more', F.some_fit],
+  ['Worth reviewing', 'score 50 or more', F.review],
+  ['Apply now', 'score 70 or more', F.apply_now],
+];
+$('funnel').innerHTML = steps.map(([l, s, n]) =>
+  `<div class="frow"><div class="lab">${l}<small>${s}</small></div><div class="track" role="img" aria-label="${l}: ${n}"><i style="width:${100 * n / F.open}%"></i><b>${fmt(n)}</b></div></div>`).join('');
+$('f1src').textContent = `Postings open on ${longDate(S.as_of)}.`;
+
+/* Figure 2 */
+const perDay = Math.round(W.new / W.days);
+$('f2title').textContent = `About ${perDay} new postings a day, and one or two worth a look`;
+$('f2claim').textContent = `Over ${W.days} days, ${W.new} new postings arrived and ${W.closed} were taken down. ${W.review} of the new ones scored 50 or more.`;
+const max = Math.max(...S.days.map(d => d.new));
+document.querySelectorAll('.week,.days').forEach(el => el.style.setProperty('--n', S.days.length));
+$('week').innerHTML = S.days.map(d => `<div class="day" aria-label="${d.day}: ${d.new} new, ${d.review} worth reviewing">
+  <div class="v">${d.new}</div>
+  <div class="bar" style="height:${100 * d.new / max}%"><span class="rev" style="height:${100 * d.review / d.new}%;min-height:${d.review ? 3 : 0}px"></span></div></div>`).join('');
+$('days').innerHTML = S.days.map(d => `<span>${shortDate(d.day)}<em>${d.review ? `${d.review} to review` : '–'}</em></span>`).join('');
+$('f2src').textContent = `New postings by the day they first appeared, ${longDate(S.days[0].day)} to ${longDate(S.days[S.days.length - 1].day)}.`;
+
+/* Figure 3 */
+const boards = S.by_source.find(s => s.type === 'Job boards');
+const totalRev = S.by_source.reduce((a, s) => a + s.review, 0);
+$('f3title').textContent = `Job boards bring ${pct(boards.review, totalRev)} of the matches, even with a penalty`;
+$('f3claim').textContent = `I built the tool around mission-driven organizations, and their roles receive a bonus. They post few data roles at a time, though, so most matches still come from the six remote job boards, even though those boards take a 5-point penalty for listing many staffing agencies.`;
+const maxOpen = Math.max(...S.by_source.map(s => s.open));
+const maxRev = Math.max(...S.by_source.map(s => s.review), 1);
+$('sources').innerHTML = `<thead><tr><th>Source</th><th>Open postings</th><th></th><th>Worth reviewing</th><th></th></tr></thead><tbody>` +
+  S.by_source.map(s => `<tr><td>${s.type}</td>
+    <td><div class="minibar" style="width:${100 * s.open / maxOpen}%"></div></td><td class="n">${fmt(s.open)}</td>
+    <td>${s.review ? `<div class="minibar k" style="width:${100 * s.review / maxRev}%"></div>` : ''}</td><td class="n">${s.review}</td></tr>`).join('') + '</tbody>';
+$('f3src').textContent = `Open postings on ${longDate(S.as_of)}, by the kind of organization that posted them.`;
+
+/* Figure 4 */
+const g = Object.fromEntries(S.ghost.map(x => [x.label, x.count]));
+const gt = S.ghost.reduce((a, x) => a + x.count, 0);
+$('f4title').textContent = `About one in five open postings carries some ghost risk`;
+const colors = {'Low risk': 'var(--low)', 'Some risk': 'var(--some)', 'High risk': 'var(--high)'};
+$('ghost').setAttribute('aria-label', S.ghost.map(x => `${x.label}: ${x.count}`).join(', '));
+$('ghost').innerHTML = S.ghost.map(x => `<i style="width:${100 * x.count / gt}%;background:${colors[x.label]}">${x.count / gt > .07 ? fmt(x.count) : ''}</i>`).join('');
+$('f4src').textContent = `${fmt(g['Low risk'])} low, ${fmt(g['Some risk'])} some and ${fmt(g['High risk'])} high risk, of ${fmt(gt)} open postings on ${longDate(S.as_of)}.`;
+
+$('runningNote').textContent = `It has run every morning since ${longDate(S.first_day)}.`;
+$('noteAsOf').textContent = `Open-posting counts are from ${longDate(S.as_of)}. ${fmt(S.seen)} postings have been seen in all.`;
+$('noteSteady').textContent = `The first day, ${longDate(S.first_day)}, included setup runs while sources were being added, so the weekly figures start the next day.`;
+</script>
+<script>
+/* Report page height to a parent page when embedded in an iframe. */
+(function(){ if(window.parent===window) return;
+  document.documentElement.setAttribute('data-theme','light');
+  document.documentElement.classList.add('is-embedded');
+  let last=0; function send(){ const h=Math.ceil(document.body.getBoundingClientRect().height); if(h!==last){ last=h; window.parent.postMessage({type:'work-search-height',height:h},'*'); } }
+  new ResizeObserver(send).observe(document.body); window.addEventListener('load',send); send(); })();
+</script>
+</body>
+</html>
