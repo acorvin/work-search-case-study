@@ -92,3 +92,7 @@ Only the Python standard library is needed.
 Python, FastAPI and SQLite for collection, scoring and the API; Vue and TypeScript for the screens; a macOS launchd job for the daily run.
 
 Design and engineering: Alex Corvin.
+
+## License
+
+Copyright 2026 Alex Corvin. All rights reserved. You may view this repository, but you may not copy, reuse or redistribute any part of it without my written permission. See [LICENSE](LICENSE) for the full terms.
